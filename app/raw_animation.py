@@ -518,7 +518,7 @@ def format_raw_summary(raw: RawAnimation) -> str:
         f"Magic: {raw.magic4} (first 5 bytes: {raw.magic5_hex})",
         f"Version: {raw.version}",
         f"File size: {raw.file_size} bytes (0x{raw.file_size:X})",
-        f"Unknown header fields: 0x{raw.unknown1:08X}, 0x{raw.file_size:X})",
+        f"Unknown header fields: 0x{raw.unknown1:08X}, 0x{raw.unknown2:08X}",
         f"ID/sample count: {raw.num_ids}",
         f"Bone/track count: {raw.num_bones}",
         f"Track flags: {counts}  [0=bind, 2=child, 8=root]",

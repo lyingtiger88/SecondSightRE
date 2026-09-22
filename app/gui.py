@@ -308,7 +308,7 @@ class SecondSightExtractorApp(tk.Tk):
                 if self.file_tree.exists(str(i)): self.file_tree.item(str(i),values=(f.rel_path,f.ext or "(none)",human_size(f.size),f.signature,f"{f.entropy:.3f}"))
                 if n==0:
                     self._set_text(self.details,f"Path: {f.path}\nSize: {f.size} bytes ({human_size(f.size)})\nDetected type: {f.signature}\nSample entropy: {f.entropy:.4f} / 8.0\nAnalyzed sample: {r['sample_size']} bytes\n")
-                    self._set_text(self.hex_view,r["hex"]); self._set_text(self.strings_view,"\n".join(r["strings"])); self.tabs.select(1)
+                    self._set_text(self.hex_view,r["hex"]); self._set_text(self.strings_view,"\n".join(r["strings"])); self.tabs.select(2)
             except Exception as exc: self._log(f"Analyze failed: {f.rel_path}: {exc}")
 
     def _out(self):

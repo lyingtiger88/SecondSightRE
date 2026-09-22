@@ -34,7 +34,7 @@ def cli(argv: list[str]) -> int:
         return 1 if report['parse_errors'] else 0
 
     if args.inspect_raw:
-        raw = inspect_raw_animation(Path(args.inspect_raw))
+        raw = inspect_raw_animation(Path(args.inspect_raw), allow_unknown_magic=True)
         print(format_raw_summary(raw), end='')
         print('\nTracks:')
         for t in raw.tracks:

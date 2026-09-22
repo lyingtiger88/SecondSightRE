@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.1 Alpha — ANR1 RAW Inspector
+# SecondSightRE v0.6.1 Alpha — RAW Layout Profiler
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
