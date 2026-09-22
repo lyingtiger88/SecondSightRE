@@ -1,6 +1,6 @@
-# SecondSightRE v0.5 Alpha
+# SecondSightRE v0.6.1 Alpha — ANR1 RAW Inspector
 
-A read-only desktop extractor and reverse-engineering toolkit for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
+A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
 This build **does not copy the whole `.pak` file as "extraction"**. It parses the archive header and directory table, validates each entry's offset/size, then reads and writes each entry individually.
 
@@ -18,10 +18,11 @@ Implemented now:
 - Protect output from unsafe archive paths (`..`, drive prefixes, invalid Windows characters).
 - Binary analysis tab with signature, entropy, strings, and hex preview.
 - CLI mode for repeatable/batch extraction.
+- Experimental `ANR1` RAW animation/bind-pose inspector: header counts, IDs, 32-byte track metadata, track flags, payload offsets, packed quaternion decoding, and JSON metadata export.
 
 Not implemented yet:
 
-- Decoding Second Sight proprietary `.raw`/asset payloads into meshes, skeletons, animations, materials, or level scene graphs.
+- Production-ready conversion of Second Sight `.raw` payloads into DCC animation/mesh formats. v0.6 only adds an experimental ANR1 inspector/decoder that must be validated against real game samples before Maya export.
 - FBX/glTF export.
 - Maya bridge.
 - Unreal Level Instance importer.
@@ -113,28 +114,11 @@ References:
 
 The extractor code in this package is an independent Python implementation. A copy of the TS-ReSplit MIT license is included in `THIRD_PARTY_NOTICES.txt` as attribution for the public research/code inspected while implementing the format reader.
 
-## Validation status
+## Important limitation
 
-- Byte-for-byte self-tests cover the **Second Sight PC P4CK 16-byte directory layout** and the legacy P4CK fallback.
-- The P4CK parser has also been validated against a real Second Sight PC `animg2.pak`, where the archive directory and named animation entries were successfully enumerated and extracted.
-- Proprietary `.raw` payload decoding is still in development.
+This build has byte-for-byte self-tests for the **Second Sight PC P4CK 16-byte directory layout** and the legacy P4CK fallback. Your screenshot exposed the old parser bug (`9488` was wrongly treated as a 60-byte table); v0.5 fixes that. The next validation step is to run **Inspect Selected PAK** on your real `animg2.pak` and verify that the file list appears.
 
-No copyrighted game assets are included in this repository.
-
-## Roadmap
-
-- [x] Second Sight PC P4CK extraction
-- [x] Archive browser
-- [x] Search/filter
-- [x] Batch extraction
-- [x] Auto-open extracted folder
-- [ ] RAW animation parser
-- [ ] Bind-pose / skeleton parser
-- [ ] Maya bridge
-- [ ] Mesh parser
-- [ ] Level parser
-- [ ] Unreal Engine bridge
-- [ ] Level Instance generation
+No copyrighted game assets are included.
 
 ## Search (v0.5)
 
@@ -155,3 +139,49 @@ Press **Ctrl+F** to focus Search and **Esc** to clear it.
 - Single-PAK extraction opens that PAK's exact output directory.
 - Batch/Extract All opens the common `PAK_Extracted` directory.
 - Added a manual **Open Extracted Folder** button.
+
+## ANR1 RAW Inspector (v0.6)
+
+The new **Inspect RAW / Bind Pose** action opens Free Radical `ANR1` animation-family RAW files and reports:
+
+- magic/version and the two unknown header fields currently tracked for research;
+- ID/sample count and bone/track count;
+- every 32-byte track record (`unknown`, `flags`, `NumFrames`, `NumKeyframes`);
+- observed track roles (`0 = bind`, `2 = child`, `8 = root`);
+- payload offsets/sizes and remaining trailing bytes;
+- packed 8-byte quaternion decoding (`4 x uint16` mapped from `[0,65535]` to `[-1,1]`);
+- bind-pose frame decoding and root/child animation payload previews;
+- JSON export of inspection metadata.
+
+CLI example:
+
+```bat
+python main.py --inspect-raw "D:\SecondSightDump\anim\data\g2\stand_i.raw"
+```
+
+Batch-analyze an extracted RAW tree and write a compact JSON report:
+
+```bat
+python main.py --scan-raw "D:\SecondSightDump" -o "D:\SecondSightReports"
+```
+
+This code is deliberately **validation-first**. The layout is based on public Free Radical animation research in TS-ReSplit and synthetic byte-for-byte tests. Before Maya/FBX export, the next task is to run this inspector across the extracted Second Sight animation + skeleton samples and resolve any variant/trailing-data cases.
+
+Additional research reference:
+
+- https://github.com/GoomiiV2/TS-ReSplit/blob/master/TS%20ReSplit/Assets/Scripts/TSLoader/Ts2Animation.cs
+
+### v0.6 test coverage
+
+Run:
+
+```bat
+python raw_selftest.py
+```
+
+The synthetic test validates both a normal ANR1 animation (root + child tracks) and a bind pose, including packed quaternion decoding and exact payload consumption.
+
+
+## v0.6.1 validation hotfix
+
+The first v0.6 test against 611 real Second Sight RAW files showed that none use the assumed `ANR1` magic. v0.6.1 therefore stops treating `ANR1` as a requirement and adds a format-neutral RAW header/layout profiler. `Analyze RAW Folder...` now records signature counts, representative 96-byte headers, little-endian integer/float views, and an experimental TS2-style layout plausibility score. Unknown magic is only parsed when the structural checks are strong enough; otherwise the file is profiled, not guessed.

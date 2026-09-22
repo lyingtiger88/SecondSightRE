@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.extractor import extract_archive
 from app.plugins import FreeRadicalPakPlugin
+from app.raw_animation import format_raw_folder_report, format_raw_summary, inspect_raw_animation, scan_raw_folder
 from app.scanner import scan_folder, is_supported_pak_signature
 
 
@@ -15,10 +16,31 @@ def cli(argv: list[str]) -> int:
     p.add_argument('--extract-all', metavar='GAME_DIR', help='Scan a game folder and extract every supported PAK')
     p.add_argument('-o', '--output', default='SecondSight_Extracted', help='Output directory')
     p.add_argument('--list', metavar='PAK', help='List entries in one archive')
+    p.add_argument('--inspect-raw', metavar='RAW', help='Inspect one Free Radical ANR1 animation/bind-pose RAW file')
+    p.add_argument('--scan-raw', metavar='DIR', help='Analyze every .raw below a folder and write raw_analysis_report.json')
     args = p.parse_args(argv)
 
     plugin = FreeRadicalPakPlugin()
     out = Path(args.output)
+
+    if args.scan_raw:
+        report = scan_raw_folder(Path(args.scan_raw), decode_payload=True)
+        out.mkdir(parents=True, exist_ok=True)
+        report_path = out / 'raw_analysis_report.json'
+        import json
+        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+        print(format_raw_folder_report(report), end='')
+        print(f'Report: {report_path}')
+        return 1 if report['parse_errors'] else 0
+
+    if args.inspect_raw:
+        raw = inspect_raw_animation(Path(args.inspect_raw))
+        print(format_raw_summary(raw), end='')
+        print('\nTracks:')
+        for t in raw.tracks:
+            payload = '' if t.payload_offset is None else f' payload=0x{t.payload_offset:X}+{t.payload_size}'
+            print(f'{t.index:4d}  flag={t.flags:2d} {t.flag_name:12s}  frames={t.num_frames:g}  keys={t.num_keyframes}{payload}')
+        return 0
 
     if args.list:
         path = Path(args.list)

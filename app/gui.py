@@ -12,18 +12,21 @@ from tkinter import filedialog, messagebox, ttk
 
 from .extractor import archive_output_dir, extract_archive
 from .plugins import FreeRadicalPakPlugin
+from .raw_animation import RawAnimationError, format_raw_folder_report, format_raw_summary, inspect_raw_animation, scan_raw_folder
 from .scanner import analyze_file, human_size, is_supported_pak_signature, scan_folder
 
 
 class SecondSightExtractorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("SecondSightRE v0.5 Alpha")
+        self.title("SecondSightRE v0.6.1 Alpha - RAW Layout Profiler")
         self.geometry("1450x900")
         self.minsize(1100, 700)
 
         self.files = []
         self.current_entries = []
+        self.current_raw = None
+        self.current_raw_path: Path | None = None
         self.plugin = FreeRadicalPakPlugin()
         self.q: queue.Queue = queue.Queue()
         self.busy = False
@@ -65,6 +68,8 @@ class SecondSightExtractorApp(tk.Tk):
             ("3. Extract Selected PAK(s)", self.extract_selected),
             ("Extract ALL Detected PAKs", self.extract_all),
             ("Binary Analyze", self.analyze_selected),
+            ("Inspect RAW / Bind Pose", self.inspect_raw),
+            ("Analyze RAW Folder...", self.analyze_raw_folder),
             ("Export Scan Manifest", self.export_manifest),
         ):
             b = ttk.Button(bar, text=text, command=cmd); b.pack(side="left", padx=(0, 6)); self.action_buttons.append(b)
@@ -93,8 +98,8 @@ class SecondSightExtractorApp(tk.Tk):
         left.rowconfigure(0, weight=1); left.columnconfigure(0, weight=1)
 
         self.tabs = ttk.Notebook(right); self.tabs.pack(fill="both", expand=True)
-        pakf, detf, hexf, strf = (ttk.Frame(self.tabs) for _ in range(4))
-        for f, t in ((pakf,"PAK Contents"),(detf,"Details"),(hexf,"Hex Preview"),(strf,"Strings")): self.tabs.add(f, text=t)
+        pakf, rawf, detf, hexf, strf = (ttk.Frame(self.tabs) for _ in range(5))
+        for f, t in ((pakf,"PAK Contents"),(rawf,"RAW Inspector"),(detf,"Details"),(hexf,"Hex Preview"),(strf,"Strings")): self.tabs.add(f, text=t)
         pcols = ("idx","name","offset","size","id","extra")
         self.pak_tree = ttk.Treeview(pakf, columns=pcols, show="headings")
         for c,label,width in (("idx","#",50),("name","Name / Hash",320),("offset","Offset",105),("size","Size",90),("id","ID",105),("extra","Extra",105)):
@@ -103,6 +108,12 @@ class SecondSightExtractorApp(tk.Tk):
         self.pak_tree.configure(yscrollcommand=pys.set, xscrollcommand=pxs.set)
         self.pak_tree.grid(row=0,column=0,sticky="nsew"); pys.grid(row=0,column=1,sticky="ns"); pxs.grid(row=1,column=0,sticky="ew")
         pakf.rowconfigure(0, weight=1); pakf.columnconfigure(0, weight=1)
+        self.raw_tab = rawf
+        rawbar = ttk.Frame(rawf); rawbar.pack(fill="x", padx=4, pady=4)
+        ttk.Button(rawbar, text="Open RAW...", command=self.inspect_raw).pack(side="left", padx=(0,6))
+        ttk.Button(rawbar, text="Analyze RAW Folder...", command=self.analyze_raw_folder).pack(side="left", padx=(0,6))
+        ttk.Button(rawbar, text="Export Current RAW JSON", command=self.export_current_raw_json).pack(side="left")
+        self.raw_summary = self._text(rawf, wrap="word", font=("Consolas",9))
         self.details = self._text(detf, wrap="word")
         self.hex_view = self._text(hexf, wrap="none", font=("Consolas",9))
         self.strings_view = self._text(strf, wrap="none", font=("Consolas",9))
@@ -111,6 +122,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
+        self._log("v0.6.1 RAW profiler: profiles real Second Sight RAW headers without requiring ANR1 magic.")
 
     @staticmethod
     def _text(parent, **kw):
@@ -220,6 +232,71 @@ class SecondSightExtractorApp(tk.Tk):
         self.current_entries=entries; self._filter(); self.tabs.select(0)
         self._set_text(self.details, f"Archive: {f.path}\nMagic: {h.magic}\nVariant: {h.variant}\nFile size: {h.file_size} bytes ({human_size(h.file_size)})\nDirectory offset: 0x{h.directory_offset:X}\nDirectory size/count: {h.directory_size}\nFilenames offset: 0x{h.filenames_offset:X}\nParsed entries: {len(entries)}\n\nEach extracted output is read from its own archive offset and size.\n")
         self._log(f"Inspected {f.rel_path}: {h.magic}, {len(entries)} entries.")
+
+    def inspect_raw(self):
+        f = self._first()
+        path = Path(f.path) if f and Path(f.path).suffix.lower() == ".raw" else None
+        if path is None:
+            chosen = filedialog.askopenfilename(
+                title="Select Second Sight RAW",
+                initialdir=self.out_var.get().strip() or self.game_var.get().strip() or None,
+                filetypes=[("RAW files","*.raw"),("All files","*.*")],
+            )
+            if not chosen: return
+            path = Path(chosen)
+        try:
+            raw = inspect_raw_animation(path, decode_payload=True, allow_unknown_magic=True)
+        except RawAnimationError as exc:
+            self._log(f"RAW parse failed: {path}: {exc}")
+            return messagebox.showerror("RAW parse failed", str(exc))
+        except Exception as exc:
+            self._log(f"RAW inspect error: {path}: {exc}")
+            return messagebox.showerror("RAW inspect error", str(exc))
+        self.current_raw = raw
+        self.current_raw_path = path
+        self._set_text(self.raw_summary, format_raw_summary(raw))
+        self.tabs.select(self.raw_tab)
+        self._log(f"RAW inspected: {path.name} -> {raw.kind}, {raw.num_bones} track(s), {raw.num_ids} ID/sample(s)")
+
+    def analyze_raw_folder(self):
+        chosen = filedialog.askdirectory(
+            title="Select folder containing extracted RAW files",
+            initialdir=self.out_var.get().strip() or self.game_var.get().strip() or None,
+        )
+        if not chosen: return
+        try:
+            report = scan_raw_folder(Path(chosen), decode_payload=True)
+        except Exception as exc:
+            self._log(f"RAW folder analysis failed: {exc}")
+            return messagebox.showerror("RAW folder analysis failed", str(exc))
+        out_root = Path(self.out_var.get().strip()) if self.out_var.get().strip() else Path(chosen)
+        out_root.mkdir(parents=True, exist_ok=True)
+        report_path = out_root / "raw_analysis_report.json"
+        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        self.current_raw = None
+        self.current_raw_path = None
+        self._set_text(self.raw_summary, format_raw_folder_report(report) + f"\nReport saved: {report_path}\n")
+        self.tabs.select(self.raw_tab)
+        self._log(f"RAW folder analyzed: {report['layout_candidates']} layout candidate(s), {report['parsed_layout']} parsed / {report['total_raw_files']} RAW -> {report_path}")
+        messagebox.showinfo(
+            "RAW folder analysis complete",
+            f"Layout candidates: {report['layout_candidates']}\nParsed layouts: {report['parsed_layout']}\n"
+            f"Total RAW: {report['total_raw_files']}\nParse errors: {report['parse_errors']}\n\nReport: {report_path}"
+        )
+
+    def export_current_raw_json(self):
+        if self.current_raw is None:
+            return messagebox.showinfo("No RAW loaded", "Inspect a RAW file first.")
+        chosen = filedialog.asksaveasfilename(
+            title="Export RAW inspection JSON",
+            defaultextension=".json",
+            initialfile=(self.current_raw_path.stem if self.current_raw_path else "raw") + "_raw.json",
+            filetypes=[("JSON","*.json"),("All files","*.*")],
+        )
+        if not chosen: return
+        Path(chosen).write_text(json.dumps(self.current_raw.to_dict(include_samples=False), indent=2, ensure_ascii=False), encoding="utf-8")
+        self._log(f"RAW inspection JSON saved: {chosen}")
+        messagebox.showinfo("RAW JSON saved", chosen)
 
     def analyze_selected(self):
         ids=self._selected_indices()
