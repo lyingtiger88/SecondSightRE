@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.2 Alpha — Second Sight RAW Header Profiler
+# SecondSightRE v0.6.3 Alpha — RAW Timeline + Track Profiler
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -18,11 +18,11 @@ Implemented now:
 - Protect output from unsafe archive paths (`..`, drive prefixes, invalid Windows characters).
 - Binary analysis tab with signature, entropy, strings, and hex preview.
 - CLI mode for repeatable/batch extraction.
-- Second Sight PC RAW header profiler based on the real 611-file validation set: FF*8 sentinel, observed header fields at `0x08/0x0C/0x10`, bone count at `0x14`, mirrored bone count at `0x24`, and the dword table beginning at `0x3C`.
+- Second Sight PC RAW profiler validated against 611 real files: FF*8 sentinel, bone counts, animation time-ID tables, 32-byte per-bone animation track descriptors, payload offsets, and pose bytes-per-bone size formulas.
 
 Not implemented yet:
 
-- Production-ready decoding of Second Sight `.raw` payloads into bone transforms/keyframes. v0.6.2 fixes the header model first; payload semantics are still under reverse engineering.
+- Production-ready decoding of Second Sight `.raw` payload bytes into actual translation/rotation keyframes. v0.6.3 now resolves the animation metadata boundary; transform payload semantics are the next target.
 - FBX/glTF export.
 - Maya bridge.
 - Unreal Level Instance importer.
@@ -220,3 +220,30 @@ Run the header self-test:
 ```bat
 python ssraw_selftest.py
 ```
+
+
+## v0.6.3 — timeline and track descriptor structure
+
+The third real-game validation report parsed all 611 RAW headers with zero parse errors, zero FF-sentinel mismatches, and zero mirrored-bone-count mismatches. It also confirmed that the earlier `0x3C` dword sequence is not a bone table header.
+
+For normal animation-like RAW files, the current model is:
+
+```text
+0x00  FF FF FF FF FF FF FF FF
+0x08  u32 field_08            usually 17
+0x0C  u32 frame_count-like
+0x10  u32 time_id_count-like
+0x14  u32 bone_count
+0x18  12 bytes reserved
+0x24  u32 bone_count mirror
+0x28  20 bytes reserved
+0x3C  u32 time_ids[field_10]
+      track_descriptor[bone_count], 32 bytes each
+      transform/keyframe payload
+```
+
+Across every animation sample in the report where the complete time-ID array was visible, the time IDs were strictly increasing, the penultimate value was `field_0C - 1`, and the final value was `0`. The track records observed after that table have the stable 32-byte shape `u32 mode, f32 duration, u32 key_count, 20 zero bytes`; the floating duration matches `field_0C` and the key count matches `field_10`.
+
+Pose files form a different family. The 17 `field_08=17` static/weapon/skeleton poses fit an exact `0x44 + 50 * bone_count` file-size formula, while the 16 `field_08=0` ragdoll/human bind poses fit `0x44 + 60 * bone_count` exactly. v0.6.3 records these per-bone sizes and captures first-record/payload hex for the next reverse-engineering pass.
+
+The next target is the transform payload itself: identify which track modes carry root translation, child rotation, static channels, and the packed quaternion/keyframe representation, then export a neutral animation IR for Maya/Unreal.

@@ -277,10 +277,16 @@ class SecondSightExtractorApp(tk.Tk):
         self.current_raw_path = None
         self._set_text(self.raw_summary, format_second_sight_folder_report(report) + f"\nReport saved: {report_path}\n")
         self.tabs.select(self.raw_tab)
-        self._log(f"RAW folder analyzed: {report['parsed_headers']} Second Sight header(s) / {report['total_raw_files']} RAW -> {report_path}")
+        self._log(
+            f"RAW folder analyzed: {report['parsed_headers']} headers / {report['total_raw_files']} RAW; "
+            f"time tables {report['animation_time_table_valid']}/{report['animation_time_table_invalid']} valid/invalid; "
+            f"track tables {report['animation_track_table_valid']}/{report['animation_track_table_invalid']} valid/invalid -> {report_path}"
+        )
         messagebox.showinfo(
             "RAW folder analysis complete",
             f"Parsed headers: {report['parsed_headers']}\nTotal RAW: {report['total_raw_files']}\n"
+            f"Animation time tables valid/invalid: {report['animation_time_table_valid']} / {report['animation_time_table_invalid']}\n"
+            f"Animation track tables valid/invalid: {report['animation_track_table_valid']} / {report['animation_track_table_invalid']}\n"
             f"Sentinel mismatches: {report['sentinel_mismatch']}\nBone mirror mismatches: {report['bone_count_mirror_mismatch']}\n"
             f"Parse errors: {report['parse_errors']}\n\nReport: {report_path}"
         )
