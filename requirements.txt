@@ -1,0 +1,3 @@
+# Runtime: Python standard library only.
+# Optional EXE build dependency:
+# pyinstaller>=6.0
