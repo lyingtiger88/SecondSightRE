@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.3 Alpha — RAW Timeline + Track Profiler
+# SecondSightRE v0.6.4 Alpha — RAW Timeline + Track Profiler
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -247,3 +247,23 @@ Across every animation sample in the report where the complete time-ID array was
 Pose files form a different family. The 17 `field_08=17` static/weapon/skeleton poses fit an exact `0x44 + 50 * bone_count` file-size formula, while the 16 `field_08=0` ragdoll/human bind poses fit `0x44 + 60 * bone_count` exactly. v0.6.3 records these per-bone sizes and captures first-record/payload hex for the next reverse-engineering pass.
 
 The next target is the transform payload itself: identify which track modes carry root translation, child rotation, static channels, and the packed quaternion/keyframe representation, then export a neutral animation IR for Maya/Unreal.
+
+
+## v0.6.4 — build/report provenance
+
+To prevent stale EXEs or old JSON reports from being mistaken for the current parser:
+
+- the GUI/CLI version comes from one central `app/version.py`;
+- RAW reports include `tool_version`, `report_schema`, and `parser` fields;
+- GUI batch analysis writes a versioned filename such as `raw_analysis_report_v0.6.4.json`;
+- the Windows build script deletes older `SecondSightRE_v*.exe` files before creating the new executable.
+
+A valid v0.6.4 report should begin with fields similar to:
+
+```json
+{
+  "tool_version": "0.6.4",
+  "report_schema": 2,
+  "parser": "app.second_sight_raw"
+}
+```

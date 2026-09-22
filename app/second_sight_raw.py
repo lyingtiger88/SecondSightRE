@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .version import REPORT_SCHEMA, __version__
+
 SS_SENTINEL = b"\xff" * 8
 HEADER_SIZE = 0x3C
 TABLE_OFFSET = 0x3C
@@ -451,6 +453,9 @@ def scan_second_sight_raw_folder(root: str | Path) -> dict[str, Any]:
             })
 
     return {
+        "tool_version": __version__,
+        "report_schema": REPORT_SCHEMA,
+        "parser": "app.second_sight_raw",
         "root": str(root),
         "total_raw_files": len(files),
         "parsed_headers": len(items),
@@ -477,6 +482,8 @@ def scan_second_sight_raw_folder(root: str | Path) -> dict[str, Any]:
 
 def format_second_sight_folder_report(report: dict[str, Any]) -> str:
     lines = [
+        f"Tool version: {report.get('tool_version', 'unknown')}",
+        f"Report schema: {report.get('report_schema', 'unknown')}",
         f"RAW folder: {report['root']}",
         f"Total .raw files: {report['total_raw_files']}",
         f"Parsed Second Sight headers: {report['parsed_headers']}",

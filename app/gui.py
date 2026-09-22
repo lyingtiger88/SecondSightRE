@@ -272,7 +272,7 @@ class SecondSightExtractorApp(tk.Tk):
             return messagebox.showerror("RAW folder analysis failed", str(exc))
         out_root = Path(self.out_var.get().strip()) if self.out_var.get().strip() else Path(chosen)
         out_root.mkdir(parents=True, exist_ok=True)
-        report_path = out_root / "raw_analysis_report.json"
+        report_path = out_root / f"raw_analysis_report_v{__version__}.json"
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         self.current_raw = None
         self.current_raw_path = None
