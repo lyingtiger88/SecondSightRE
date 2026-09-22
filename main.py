@@ -8,10 +8,12 @@ from app.extractor import extract_archive
 from app.plugins import FreeRadicalPakPlugin
 from app.second_sight_raw import (format_second_sight_folder_report, format_second_sight_raw_summary, inspect_second_sight_raw, scan_second_sight_raw_folder)
 from app.scanner import scan_folder, is_supported_pak_signature
+from app.version import APP_NAME, __version__
 
 
 def cli(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description='Second Sight / Free Radical PAK extractor')
+    p.add_argument('--version', action='version', version=f'{APP_NAME} v{__version__}')
     p.add_argument('--extract', metavar='PAK', help='Extract one P4CK/P5CK/P8CK archive')
     p.add_argument('--extract-all', metavar='GAME_DIR', help='Scan a game folder and extract every supported PAK')
     p.add_argument('-o', '--output', default='SecondSight_Extracted', help='Output directory')

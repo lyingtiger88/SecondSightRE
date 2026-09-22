@@ -14,12 +14,13 @@ from .extractor import archive_output_dir, extract_archive
 from .plugins import FreeRadicalPakPlugin
 from .second_sight_raw import SecondSightRawError, format_second_sight_folder_report, format_second_sight_raw_summary, inspect_second_sight_raw, scan_second_sight_raw_folder
 from .scanner import analyze_file, human_size, is_supported_pak_signature, scan_folder
+from .version import __version__, app_title
 
 
 class SecondSightExtractorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("SecondSightRE v0.6.2 Alpha - Second Sight RAW Header Profiler")
+        self.title(app_title())
         self.geometry("1450x900")
         self.minsize(1100, 700)
 
@@ -122,7 +123,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
-        self._log("v0.6.2 RAW profiler: uses the observed Second Sight PC FF*8 header layout and stops TS2 false-positive parsing.")
+        self._log(f"v{__version__} RAW profiler: timeline IDs, 32-byte track descriptors, payload boundaries, and pose record profiling enabled.")
 
     @staticmethod
     def _text(parent, **kw):
