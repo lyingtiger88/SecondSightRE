@@ -123,7 +123,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
-        self._log(f"v{__version__} RAW profiler: timeline IDs, 32-byte track descriptors, payload boundaries, and pose record profiling enabled.")
+        self._log(f"v{__version__} RAW profiler: corrected key-time alignment, 32-byte track headers, exact per-flag payload segmentation, and pose payload splitting enabled.")
 
     @staticmethod
     def _text(parent, **kw):
@@ -281,13 +281,15 @@ class SecondSightExtractorApp(tk.Tk):
         self._log(
             f"RAW folder analyzed: {report['parsed_headers']} headers / {report['total_raw_files']} RAW; "
             f"time tables {report['animation_time_table_valid']}/{report['animation_time_table_invalid']} valid/invalid; "
-            f"track tables {report['animation_track_table_valid']}/{report['animation_track_table_invalid']} valid/invalid -> {report_path}"
+            f"track tables {report['track_table_valid']}/{report['track_table_invalid']} valid/invalid; "
+            f"payload formulas {report['payload_formula_valid']}/{report['payload_formula_invalid']}/{report['payload_formula_unknown']} valid/invalid/unknown -> {report_path}"
         )
         messagebox.showinfo(
             "RAW folder analysis complete",
             f"Parsed headers: {report['parsed_headers']}\nTotal RAW: {report['total_raw_files']}\n"
             f"Animation time tables valid/invalid: {report['animation_time_table_valid']} / {report['animation_time_table_invalid']}\n"
-            f"Animation track tables valid/invalid: {report['animation_track_table_valid']} / {report['animation_track_table_invalid']}\n"
+            f"Track tables valid/invalid: {report['track_table_valid']} / {report['track_table_invalid']}\n"
+            f"Payload formulas valid/invalid/unknown: {report['payload_formula_valid']} / {report['payload_formula_invalid']} / {report['payload_formula_unknown']}\n"
             f"Sentinel mismatches: {report['sentinel_mismatch']}\nBone mirror mismatches: {report['bone_count_mirror_mismatch']}\n"
             f"Parse errors: {report['parse_errors']}\n\nReport: {report_path}"
         )

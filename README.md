@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.4 Alpha — RAW Timeline + Track Profiler
+# SecondSightRE v0.6.5 Alpha — RAW Track Alignment + Payload Segmentation
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -22,7 +22,7 @@ Implemented now:
 
 Not implemented yet:
 
-- Production-ready decoding of Second Sight `.raw` payload bytes into actual translation/rotation keyframes. v0.6.3 now resolves the animation metadata boundary; transform payload semantics are the next target.
+- Production-ready decoding of Second Sight `.raw` payload bytes into actual translation/rotation values. v0.6.5 resolves the corrected timing/track boundary and exact per-flag payload sizes; channel semantics are the next target.
 - FBX/glTF export.
 - Maya bridge.
 - Unreal Level Instance importer.
@@ -92,7 +92,7 @@ Run:
 build_exe_windows.bat
 ```
 
-This installs PyInstaller if needed and builds a windowed one-file executable named `SecondSightExtractor.exe`.
+This installs PyInstaller if needed and builds a windowed one-file executable named from the centralized version, e.g. `SecondSightRE_v0.6.5.exe`.
 
 ## Research basis
 
@@ -267,3 +267,46 @@ A valid v0.6.4 report should begin with fields similar to:
   "parser": "app.second_sight_raw"
 }
 ```
+
+
+## v0.6.5 — corrected track alignment and exact payload segmentation
+
+The v0.6.4 real-game report exposed a four-byte alignment error in the v0.6.3/v0.6.4 animation model. All 578 animation time tables were valid, but 557/578 track tables were reported invalid because the parser had consumed one extra dword as a time ID.
+
+Reinterpreting that dword fixes the layout consistently across all 578 animations:
+
+```text
+0x3C:
+    stored_time_ids[key_count - 1]
+    # key/time 0 is implicit
+    # last stored ID == frame_count - 1
+
+then, per bone:
+    u32 unknown        # observed 0
+    u32 flags
+    f32 duration       # matches field_0C
+    u32 key_count      # matches field_10
+    u8  reserved[16]   # observed zero
+
+then:
+    track payloads in bone order
+```
+
+The previous apparent trailing `0` in the time-ID table is actually the first track's `unknown=0` field. The same shift explains why only the last old-style track record appeared to contain four non-zero "reserved" bytes: those four bytes were already the first bytes of the transform payload.
+
+The v0.6.4 report also yields an exact byte-size equation for every animation payload. Let `K = key_count`:
+
+```text
+flags 0  -> 18 bytes
+flags 2  -> 12 + 6*K bytes
+flags 8  -> 18*K bytes
+flags 11 -> 10*K bytes
+flags 12 -> 6 + 4*K bytes
+flags 13 -> 4 + 6*K bytes
+```
+
+Those formulas reproduce the payload size of all 578 animation-like files exactly.
+
+Pose files are now modeled separately. They contain an 8-byte prefix at `0x3C..0x43`, followed by the same 32-byte track headers at `0x44`. The remaining per-bone payload is exactly 18 bytes for `field_08=17` static/pose files and 28 bytes for `field_08=0` bind/ragdoll files.
+
+v0.6.5 splits every RAW payload into per-track byte ranges and records each track's payload offset, byte count, formula, prefix/tail hex, and full hex for small tracks. This is the input needed for the next step: identifying the actual translation/quaternion packing and building a neutral animation IR.
