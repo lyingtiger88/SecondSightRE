@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.5 Alpha — RAW Track Alignment + Payload Segmentation
+# SecondSightRE v0.6.6 Alpha — RAW Transform Decoder + Animation IR
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -22,7 +22,7 @@ Implemented now:
 
 Not implemented yet:
 
-- Production-ready decoding of Second Sight `.raw` payload bytes into actual translation/rotation values. v0.6.5 resolves the corrected timing/track boundary and exact per-flag payload sizes; channel semantics are the next target.
+- Skeleton naming/hierarchy, coordinate-system confirmation, DCC import, and retargeting are still pending. v0.6.6 now decodes the transform payload itself and can export a destination-neutral Animation IR JSON.
 - FBX/glTF export.
 - Maya bridge.
 - Unreal Level Instance importer.
@@ -310,3 +310,59 @@ Those formulas reproduce the payload size of all 578 animation-like files exactl
 Pose files are now modeled separately. They contain an 8-byte prefix at `0x3C..0x43`, followed by the same 32-byte track headers at `0x44`. The remaining per-bone payload is exactly 18 bytes for `field_08=17` static/pose files and 28 bytes for `field_08=0` bind/ragdoll files.
 
 v0.6.5 splits every RAW payload into per-track byte ranges and records each track's payload offset, byte count, formula, prefix/tail hex, and full hex for small tracks. This is the input needed for the next step: identifying the actual translation/quaternion packing and building a neutral animation IR.
+
+
+## v0.6.6 — transform codecs decoded
+
+The v0.6.5 validation report confirmed all 611 track tables and all 611 payload-size equations with zero mismatches. That made it possible to solve the transform codecs.
+
+Observed payload meanings:
+
+```text
+flag 0:
+    static position = float32 x3
+    static rotation = 3 x uint16 quaternion XYZ, reconstruct positive W
+
+flag 2:
+    static position = float32 x3
+    animated rotation[K] = quaternion XYZ uint16 x3
+
+flag 8:
+    animated position[K] = float32 x3
+    animated rotation[K] = quaternion XYZ uint16 x3
+
+flag 11:
+    animated position[K] = uint16 x3 mapped to [-4,+4]
+    animated rotation[K] = packed 32-bit smallest-three quaternion
+
+flag 12:
+    static position = uint16 x3 mapped to [-4,+4]
+    animated rotation[K] = packed 32-bit smallest-three quaternion
+
+flag 13:
+    static rotation = packed 32-bit smallest-three quaternion
+    animated position[K] = uint16 x3 mapped to [-4,+4]
+```
+
+The packed 32-bit quaternion stores the omitted-component index in the low 2 bits and three 10-bit components above it. The three stored components map to `[-1/sqrt(2), +1/sqrt(2)]`; the omitted component is reconstructed as the positive square root.
+
+The 28-byte `field_08=0` bind/ragdoll payload is also decoded as:
+
+```text
+float32 position[3]
+float32 quaternion[4]
+```
+
+The GUI now has **Export Animation IR**, and the CLI supports:
+
+```bat
+python main.py --export-raw-ir "D:\SecondSightDump\run.raw" -o "D:\SecondSightIR"
+```
+
+The IR stores key times, per-bone-index translation/rotation samples, codec metadata, and explicit unknowns for skeleton names, hierarchy, coordinate system, and units. This keeps the decoder destination-neutral for the later Maya/Cascadeur/Unreal bridges.
+
+Run the transform/IR self-test:
+
+```bat
+python animation_ir_selftest.py
+```

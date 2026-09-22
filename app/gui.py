@@ -10,6 +10,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from .animation_ir import write_animation_ir
 from .extractor import archive_output_dir, extract_archive
 from .plugins import FreeRadicalPakPlugin
 from .second_sight_raw import SecondSightRawError, format_second_sight_folder_report, format_second_sight_raw_summary, inspect_second_sight_raw, scan_second_sight_raw_folder
@@ -113,7 +114,8 @@ class SecondSightExtractorApp(tk.Tk):
         rawbar = ttk.Frame(rawf); rawbar.pack(fill="x", padx=4, pady=4)
         ttk.Button(rawbar, text="Open RAW...", command=self.inspect_raw).pack(side="left", padx=(0,6))
         ttk.Button(rawbar, text="Analyze RAW Folder...", command=self.analyze_raw_folder).pack(side="left", padx=(0,6))
-        ttk.Button(rawbar, text="Export Current RAW JSON", command=self.export_current_raw_json).pack(side="left")
+        ttk.Button(rawbar, text="Export Current RAW JSON", command=self.export_current_raw_json).pack(side="left", padx=(0,6))
+        ttk.Button(rawbar, text="Export Animation IR", command=self.export_current_animation_ir).pack(side="left")
         self.raw_summary = self._text(rawf, wrap="word", font=("Consolas",9))
         self.details = self._text(detf, wrap="word")
         self.hex_view = self._text(hexf, wrap="none", font=("Consolas",9))
@@ -123,7 +125,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
-        self._log(f"v{__version__} RAW profiler: corrected key-time alignment, 32-byte track headers, exact per-flag payload segmentation, and pose payload splitting enabled.")
+        self._log(f"v{__version__}: decoded Second Sight transforms for flags 0/2/8/11/12/13 and added destination-neutral Animation IR export.")
 
     @staticmethod
     def _text(parent, **kw):
@@ -307,6 +309,27 @@ class SecondSightExtractorApp(tk.Tk):
         Path(chosen).write_text(json.dumps(self.current_raw.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
         self._log(f"RAW inspection JSON saved: {chosen}")
         messagebox.showinfo("RAW JSON saved", chosen)
+
+    def export_current_animation_ir(self):
+        if self.current_raw_path is None:
+            return messagebox.showinfo("No RAW loaded", "Inspect a RAW file first.")
+        chosen = filedialog.asksaveasfilename(
+            title="Export Second Sight Animation IR",
+            defaultextension=".json",
+            initialfile=self.current_raw_path.stem + "_animation_ir.json",
+            filetypes=[("JSON","*.json"),("All files","*.*")],
+        )
+        if not chosen: return
+        try:
+            ir = write_animation_ir(self.current_raw_path, Path(chosen))
+        except Exception as exc:
+            self._log(f"Animation IR export failed: {exc}")
+            return messagebox.showerror("Animation IR export failed", str(exc))
+        self._log(
+            f"Animation IR saved: {chosen} -> {ir['kind']}, "
+            f"{ir['bone_count']} bone track(s), {ir['key_count']} key(s)"
+        )
+        messagebox.showinfo("Animation IR saved", chosen)
 
     def analyze_selected(self):
         ids=self._selected_indices()
