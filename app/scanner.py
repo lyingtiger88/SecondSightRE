@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 KNOWN_SIGNATURES = [
+    (b'\xff\xff\xff\xff\xff\xff\xff\xff', 'Second Sight RAW candidate / FF8 sentinel'),
     (b'ANR1', 'Free Radical ANR1 animation / bind pose'),
     (b'P4CK', 'Free Radical PAK / P4CK'),
     (b'P5CK', 'Free Radical PAK / P5CK'),

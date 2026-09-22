@@ -12,14 +12,14 @@ from tkinter import filedialog, messagebox, ttk
 
 from .extractor import archive_output_dir, extract_archive
 from .plugins import FreeRadicalPakPlugin
-from .raw_animation import RawAnimationError, format_raw_folder_report, format_raw_summary, inspect_raw_animation, scan_raw_folder
+from .second_sight_raw import SecondSightRawError, format_second_sight_folder_report, format_second_sight_raw_summary, inspect_second_sight_raw, scan_second_sight_raw_folder
 from .scanner import analyze_file, human_size, is_supported_pak_signature, scan_folder
 
 
 class SecondSightExtractorApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("SecondSightRE v0.6.1 Alpha - RAW Layout Profiler")
+        self.title("SecondSightRE v0.6.2 Alpha - Second Sight RAW Header Profiler")
         self.geometry("1450x900")
         self.minsize(1100, 700)
 
@@ -122,7 +122,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
-        self._log("v0.6.1 RAW profiler: profiles real Second Sight RAW headers without requiring ANR1 magic.")
+        self._log("v0.6.2 RAW profiler: uses the observed Second Sight PC FF*8 header layout and stops TS2 false-positive parsing.")
 
     @staticmethod
     def _text(parent, **kw):
@@ -245,8 +245,8 @@ class SecondSightExtractorApp(tk.Tk):
             if not chosen: return
             path = Path(chosen)
         try:
-            raw = inspect_raw_animation(path, decode_payload=True, allow_unknown_magic=True)
-        except RawAnimationError as exc:
+            raw = inspect_second_sight_raw(path)
+        except SecondSightRawError as exc:
             self._log(f"RAW parse failed: {path}: {exc}")
             return messagebox.showerror("RAW parse failed", str(exc))
         except Exception as exc:
@@ -254,9 +254,9 @@ class SecondSightExtractorApp(tk.Tk):
             return messagebox.showerror("RAW inspect error", str(exc))
         self.current_raw = raw
         self.current_raw_path = path
-        self._set_text(self.raw_summary, format_raw_summary(raw))
+        self._set_text(self.raw_summary, format_second_sight_raw_summary(raw))
         self.tabs.select(self.raw_tab)
-        self._log(f"RAW inspected: {path.name} -> {raw.kind}, {raw.num_bones} track(s), {raw.num_ids} ID/sample(s)")
+        self._log(f"RAW inspected: {path.name} -> {raw.kind_guess}, bones={raw.bone_count}, field_0C={raw.field_0c}, field_10={raw.field_10}")
 
     def analyze_raw_folder(self):
         chosen = filedialog.askdirectory(
@@ -265,7 +265,7 @@ class SecondSightExtractorApp(tk.Tk):
         )
         if not chosen: return
         try:
-            report = scan_raw_folder(Path(chosen), decode_payload=True)
+            report = scan_second_sight_raw_folder(Path(chosen))
         except Exception as exc:
             self._log(f"RAW folder analysis failed: {exc}")
             return messagebox.showerror("RAW folder analysis failed", str(exc))
@@ -275,13 +275,14 @@ class SecondSightExtractorApp(tk.Tk):
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         self.current_raw = None
         self.current_raw_path = None
-        self._set_text(self.raw_summary, format_raw_folder_report(report) + f"\nReport saved: {report_path}\n")
+        self._set_text(self.raw_summary, format_second_sight_folder_report(report) + f"\nReport saved: {report_path}\n")
         self.tabs.select(self.raw_tab)
-        self._log(f"RAW folder analyzed: {report['layout_candidates']} layout candidate(s), {report['parsed_layout']} parsed / {report['total_raw_files']} RAW -> {report_path}")
+        self._log(f"RAW folder analyzed: {report['parsed_headers']} Second Sight header(s) / {report['total_raw_files']} RAW -> {report_path}")
         messagebox.showinfo(
             "RAW folder analysis complete",
-            f"Layout candidates: {report['layout_candidates']}\nParsed layouts: {report['parsed_layout']}\n"
-            f"Total RAW: {report['total_raw_files']}\nParse errors: {report['parse_errors']}\n\nReport: {report_path}"
+            f"Parsed headers: {report['parsed_headers']}\nTotal RAW: {report['total_raw_files']}\n"
+            f"Sentinel mismatches: {report['sentinel_mismatch']}\nBone mirror mismatches: {report['bone_count_mirror_mismatch']}\n"
+            f"Parse errors: {report['parse_errors']}\n\nReport: {report_path}"
         )
 
     def export_current_raw_json(self):
@@ -294,7 +295,7 @@ class SecondSightExtractorApp(tk.Tk):
             filetypes=[("JSON","*.json"),("All files","*.*")],
         )
         if not chosen: return
-        Path(chosen).write_text(json.dumps(self.current_raw.to_dict(include_samples=False), indent=2, ensure_ascii=False), encoding="utf-8")
+        Path(chosen).write_text(json.dumps(self.current_raw.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
         self._log(f"RAW inspection JSON saved: {chosen}")
         messagebox.showinfo("RAW JSON saved", chosen)
 

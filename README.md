@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.1 Alpha — RAW Layout Profiler
+# SecondSightRE v0.6.2 Alpha — Second Sight RAW Header Profiler
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -18,11 +18,11 @@ Implemented now:
 - Protect output from unsafe archive paths (`..`, drive prefixes, invalid Windows characters).
 - Binary analysis tab with signature, entropy, strings, and hex preview.
 - CLI mode for repeatable/batch extraction.
-- Experimental `ANR1` RAW animation/bind-pose inspector: header counts, IDs, 32-byte track metadata, track flags, payload offsets, packed quaternion decoding, and JSON metadata export.
+- Second Sight PC RAW header profiler based on the real 611-file validation set: FF*8 sentinel, observed header fields at `0x08/0x0C/0x10`, bone count at `0x14`, mirrored bone count at `0x24`, and the dword table beginning at `0x3C`.
 
 Not implemented yet:
 
-- Production-ready conversion of Second Sight `.raw` payloads into DCC animation/mesh formats. v0.6 only adds an experimental ANR1 inspector/decoder that must be validated against real game samples before Maya export.
+- Production-ready decoding of Second Sight `.raw` payloads into bone transforms/keyframes. v0.6.2 fixes the header model first; payload semantics are still under reverse engineering.
 - FBX/glTF export.
 - Maya bridge.
 - Unreal Level Instance importer.
@@ -185,3 +185,38 @@ The synthetic test validates both a normal ANR1 animation (root + child tracks) 
 ## v0.6.1 validation hotfix
 
 The first v0.6 test against 611 real Second Sight RAW files showed that none use the assumed `ANR1` magic. v0.6.1 therefore stops treating `ANR1` as a requirement and adds a format-neutral RAW header/layout profiler. `Analyze RAW Folder...` now records signature counts, representative 96-byte headers, little-endian integer/float views, and an experimental TS2-style layout plausibility score. Unknown magic is only parsed when the structural checks are strong enough; otherwise the file is profiled, not guessed.
+
+
+## v0.6.2 — real Second Sight RAW header model
+
+The second real-game validation report changed the RAW work substantially. All 611 tested RAW files begin with eight `FF` bytes, not `ANR1`. The previous TS2-style probe also produced false positives because it read the dword at `0x3C` as a bone count; on most human animations that value is simply the first word of a table and equals `4`.
+
+Representative real files show a stable Second Sight header pattern:
+
+```text
+0x00  FF FF FF FF FF FF FF FF   sentinel
+0x08  u32 field_08              meaning not confirmed
+0x0C  u32 field_0C              timeline/duration-like (tentative)
+0x10  u32 field_10              sample/key-count-like (tentative)
+0x14  u32 bone_count
+0x18  12 bytes reserved/zero in common samples
+0x24  u32 bone_count mirror
+0x28  20 bytes reserved/zero in common samples
+0x3C  dword table / payload metadata begins
+```
+
+Examples from the real validation set include human animation headers with `bone_count=21`, ragdoll bind-pose headers with `bone_count=23`, and weapon/static-pose data with `bone_count=8`. The GUI and CLI now report these observed fields directly and no longer label TS2-style false positives as decoded Second Sight animations.
+
+The old `app/raw_animation.py` ANR1/TS2 parser is retained as a research reference, but it is no longer the default Second Sight RAW parser.
+
+Run the new profiler:
+
+```bat
+python main.py --scan-raw "D:\\SecondSightDump\\PAK_Extracted\\pak\\anim" -o "D:\\SecondSightReports"
+```
+
+Run the header self-test:
+
+```bat
+python ssraw_selftest.py
+```
