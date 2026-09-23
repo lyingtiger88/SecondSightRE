@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from app.animation_ir import write_animation_ir
+from app.maya_preview import write_maya_preview_script_from_raw
 from app.extractor import extract_archive
 from app.plugins import FreeRadicalPakPlugin
 from app.second_sight_raw import (format_second_sight_folder_report, format_second_sight_raw_summary, inspect_second_sight_raw, scan_second_sight_raw_folder)
@@ -22,10 +23,31 @@ def cli(argv: list[str]) -> int:
     p.add_argument('--inspect-raw', metavar='RAW', help='Inspect one Second Sight PC RAW header')
     p.add_argument('--scan-raw', metavar='DIR', help='Analyze Second Sight .raw files below a folder and write a versioned RAW report')
     p.add_argument('--export-raw-ir', metavar='RAW', help='Decode one Second Sight RAW into destination-neutral animation IR JSON')
+    p.add_argument('--export-maya-preview', metavar='ANIM_RAW', help='Generate a Maya Python preview importer for one 21-bone animation RAW')
+    p.add_argument('--bind-raw', metavar='BIND_RAW', help='Bind/static pose RAW used with --export-maya-preview')
+    p.add_argument('--maya-unit-scale', type=float, default=100.0, help='Position scale for Maya preview export (default: 100)')
     args = p.parse_args(argv)
 
     plugin = FreeRadicalPakPlugin()
     out = Path(args.output)
+
+    if args.export_maya_preview:
+        if not args.bind_raw:
+            p.error('--export-maya-preview requires --bind-raw')
+        anim_path = Path(args.export_maya_preview)
+        bind_path = Path(args.bind_raw)
+        out.mkdir(parents=True, exist_ok=True)
+        maya_path = out / f"{anim_path.stem}_maya_preview.py"
+        meta = write_maya_preview_script_from_raw(
+            bind_path,
+            anim_path,
+            maya_path,
+            unit_scale=args.maya_unit_scale,
+        )
+        print(f"Maya preview script: {maya_path}")
+        print(f"Resolved core joints: 19 / 21; unresolved Second Sight indices: 19,20")
+        print(f"Bind max mirror error: {meta['bind_validation']['max_mirror_error']}")
+        return 0
 
     if args.export_raw_ir:
         raw_path = Path(args.export_raw_ir)

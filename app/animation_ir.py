@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .second_sight_raw import SecondSightRawError, inspect_second_sight_raw
+from .human21_profile import skeleton_profile_metadata
 
 POS16_SCALE = 4.0
 INV_SQRT2 = 1.0 / math.sqrt(2.0)
@@ -235,7 +236,7 @@ def build_animation_ir(path: str | Path) -> dict[str, Any]:
     decoded_tracks = [decode_track(data, raw, t) for t in raw.track_descriptors]
     times = _track_times(raw)
 
-    return {
+    out = {
         "schema": "secondsight.animation_ir.v1",
         "source_format": "Second Sight PC RAW",
         "source_path": str(path),
@@ -250,6 +251,19 @@ def build_animation_ir(path: str | Path) -> dict[str, Any]:
         "units_known": False,
         "tracks": decoded_tracks,
     }
+    if raw.bone_count == 21:
+        out["skeleton_profile_candidate"] = skeleton_profile_metadata()
+        out["axis_hint"] = {
+            "up": "+Y",
+            "lateral": "X",
+            "forward": "+Z for locomotion root motion",
+            "provisional": True,
+        }
+        out["unit_hint"] = {
+            "guess": "meters-like",
+            "provisional": True,
+        }
+    return out
 
 
 def write_animation_ir(path: str | Path, output_path: str | Path) -> dict[str, Any]:

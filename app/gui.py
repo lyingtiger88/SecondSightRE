@@ -11,6 +11,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .animation_ir import write_animation_ir
+from .maya_preview import write_maya_preview_script_from_raw
 from .extractor import archive_output_dir, extract_archive
 from .plugins import FreeRadicalPakPlugin
 from .second_sight_raw import SecondSightRawError, format_second_sight_folder_report, format_second_sight_raw_summary, inspect_second_sight_raw, scan_second_sight_raw_folder
@@ -115,7 +116,8 @@ class SecondSightExtractorApp(tk.Tk):
         ttk.Button(rawbar, text="Open RAW...", command=self.inspect_raw).pack(side="left", padx=(0,6))
         ttk.Button(rawbar, text="Analyze RAW Folder...", command=self.analyze_raw_folder).pack(side="left", padx=(0,6))
         ttk.Button(rawbar, text="Export Current RAW JSON", command=self.export_current_raw_json).pack(side="left", padx=(0,6))
-        ttk.Button(rawbar, text="Export Animation IR", command=self.export_current_animation_ir).pack(side="left")
+        ttk.Button(rawbar, text="Export Animation IR", command=self.export_current_animation_ir).pack(side="left", padx=(0,6))
+        ttk.Button(rawbar, text="Export Maya Preview", command=self.export_maya_preview).pack(side="left")
         self.raw_summary = self._text(rawf, wrap="word", font=("Consolas",9))
         self.details = self._text(detf, wrap="word")
         self.hex_view = self._text(hexf, wrap="none", font=("Consolas",9))
@@ -125,7 +127,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
-        self._log(f"v{__version__}: decoded Second Sight transforms for flags 0/2/8/11/12/13 and added destination-neutral Animation IR export.")
+        self._log(f"v{__version__}: Human21 core topology (0..18) + Maya preview script export; Second Sight indices 19/20 remain intentionally unresolved.")
 
     @staticmethod
     def _text(parent, **kw):
@@ -330,6 +332,51 @@ class SecondSightExtractorApp(tk.Tk):
             f"{ir['bone_count']} bone track(s), {ir['key_count']} key(s)"
         )
         messagebox.showinfo("Animation IR saved", chosen)
+
+    def export_maya_preview(self):
+        if self.current_raw_path is None or self.current_raw is None:
+            return messagebox.showinfo("No RAW loaded", "Inspect a 21-bone animation RAW first.")
+        if self.current_raw.kind_guess != "Animation-like" or self.current_raw.bone_count != 21:
+            return messagebox.showwarning(
+                "Maya preview requires Human21 animation",
+                "Load a 21-bone Animation-like RAW first (for example run.raw)."
+            )
+        bind_path = filedialog.askopenfilename(
+            title="Select 21-bone bind/static pose RAW",
+            initialdir=str(self.current_raw_path.parent),
+            filetypes=[("RAW files","*.raw"),("All files","*.*")],
+        )
+        if not bind_path: return
+        chosen = filedialog.asksaveasfilename(
+            title="Save Maya preview importer",
+            defaultextension=".py",
+            initialfile=self.current_raw_path.stem + "_maya_preview.py",
+            filetypes=[("Python","*.py"),("All files","*.*")],
+        )
+        if not chosen: return
+        try:
+            meta = write_maya_preview_script_from_raw(
+                Path(bind_path),
+                self.current_raw_path,
+                Path(chosen),
+                unit_scale=100.0,
+            )
+        except Exception as exc:
+            self._log(f"Maya preview export failed: {exc}")
+            return messagebox.showerror("Maya preview export failed", str(exc))
+        mirror = meta["bind_validation"]["max_mirror_error"]
+        height = meta["bind_validation"]["head_to_foot_height"]
+        self._log(
+            f"Maya preview script saved: {chosen}; core joints 0..18 resolved; "
+            f"indices 19/20 unresolved; bind mirror error={mirror:.6g}, height={height:.6g}"
+        )
+        messagebox.showinfo(
+            "Maya preview script saved",
+            f"{chosen}\n\nResolved core joints: 19 / 21\n"
+            f"Unresolved indices: 19, 20\n"
+            f"Default unit scale: 100 (meters-like -> Maya cm)\n"
+            f"Bind symmetry max error: {mirror:.6g}"
+        )
 
     def analyze_selected(self):
         ids=self._selected_indices()

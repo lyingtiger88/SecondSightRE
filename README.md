@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.6 Alpha — RAW Transform Decoder + Animation IR
+# SecondSightRE v0.6.7 Alpha — Human21 Skeleton + Maya Preview
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -92,7 +92,7 @@ Run:
 build_exe_windows.bat
 ```
 
-This installs PyInstaller if needed and builds a windowed one-file executable named from the centralized version, e.g. `SecondSightRE_v0.6.5.exe`.
+This installs PyInstaller if needed and builds a windowed one-file executable named from the centralized version, e.g. `SecondSightRE_v0.6.7.exe`.
 
 ## Research basis
 
@@ -365,4 +365,33 @@ Run the transform/IR self-test:
 
 ```bat
 python animation_ir_selftest.py
+```
+
+
+## v0.6.7 — Human21 topology and Maya preview
+
+Validation with `human_21_bindpose.raw` plus `run.raw` confirmed several important assumptions:
+
+- Both files contain 21 tracks.
+- `run.raw` track 0 is the root-motion track: X stays nearly constant, Y oscillates around body height, and Z advances by about 7.5 source units while the first/last root rotation matches.
+- For tracks 1..18, the compressed static positions in `run.raw` reproduce the float32 bind-pose positions with sub-millimeter-scale source-unit error (maximum around 1.5e-4 source units in the validation pair).
+- Composing bind-pose local transforms with the related Free Radical TS2 human topology yields a clean bilateral human skeleton. This strongly supports the Second Sight mapping for indices 0..18:
+  `Root, Hips, Waist, Neck, Head, Right Shoulder 1, Right Shoulder 2, Right Elbow, Right Wrist, Left Shoulder 1, Left Shoulder 2, Left Elbow, Left Wrist, Right Hip, Right Knee, Right Foot, Left Hip, Left Knee, Left Foot`.
+- Second Sight indices 19 and 20 are real tracks but their semantic names/parents are not proven yet. They remain unresolved and are intentionally omitted from the first Maya preview rig.
+- Geometry strongly suggests `+Y` up, `Z` locomotion-forward, and meter-like source units. These are still marked as provisional hints rather than hard format guarantees.
+
+The GUI now has **Export Maya Preview**. Load a 21-bone animation RAW such as `run.raw`, click the button, select `human_21_bindpose.raw`, and save the generated Python file. In Maya, run that script from the Script Editor. It creates the 19 resolved core joints, keys the animation, keeps raw axes, and uses a configurable default scale of 100 for meter-like source units to Maya centimeters.
+
+CLI:
+
+```bat
+python main.py --export-maya-preview "D:\SecondSightDump\run.raw" ^
+  --bind-raw "D:\SecondSightDump\human_21_bindpose.raw" ^
+  -o "D:\SecondSightMaya"
+```
+
+Run the generator self-test:
+
+```bat
+python maya_preview_selftest.py
 ```
