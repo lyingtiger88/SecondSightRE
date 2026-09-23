@@ -127,7 +127,7 @@ class SecondSightExtractorApp(tk.Tk):
         self.log = tk.Text(lf, height=9, wrap="word", state="disabled"); lys = ttk.Scrollbar(lf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lys.set); self.log.pack(side="left", fill="both", expand=True); lys.pack(side="right", fill="y")
         self._log("Ready. Real PAK extraction is enabled for P4CK/P5CK/P8CK.")
-        self._log(f"v{__version__}: Human21 core topology (0..18) + Maya preview script export; Second Sight indices 19/20 remain intentionally unresolved.")
+        self._log(f"v{__version__}: Human21 Maya preview + automatic human_21_bindpose.raw discovery; indices 19/20 remain intentionally unresolved.")
 
     @staticmethod
     def _text(parent, **kw):
@@ -333,6 +333,37 @@ class SecondSightExtractorApp(tk.Tk):
         )
         messagebox.showinfo("Animation IR saved", chosen)
 
+    def _find_human21_bindpose_candidates(self):
+        roots = []
+        if self.current_raw_path is not None:
+            for parent in self.current_raw_path.parents:
+                if parent.name.lower() == "pak_extracted":
+                    roots.append(parent)
+                    break
+        out_text = self.out_var.get().strip()
+        if out_text:
+            roots.append(Path(out_text))
+
+        candidates = []
+        seen = set()
+        for root in roots:
+            try:
+                root = Path(root)
+                direct = root / "pak" / "anim" / "skelg2" / "anim" / "data" / "g2" / "human_21_bindpose.raw"
+                probes = [direct] if direct.is_file() else []
+                if root.is_dir():
+                    probes.extend(root.rglob("human_21_bindpose.raw"))
+                for p in probes:
+                    key = str(p).lower()
+                    if key not in seen and p.is_file():
+                        seen.add(key)
+                        candidates.append(p)
+                if candidates:
+                    break
+            except OSError:
+                continue
+        return candidates
+
     def export_maya_preview(self):
         if self.current_raw_path is None or self.current_raw is None:
             return messagebox.showinfo("No RAW loaded", "Inspect a 21-bone animation RAW first.")
@@ -341,12 +372,62 @@ class SecondSightExtractorApp(tk.Tk):
                 "Maya preview requires Human21 animation",
                 "Load a 21-bone Animation-like RAW first (for example run.raw)."
             )
-        bind_path = filedialog.askopenfilename(
-            title="Select 21-bone bind/static pose RAW",
-            initialdir=str(self.current_raw_path.parent),
-            filetypes=[("RAW files","*.raw"),("All files","*.*")],
-        )
-        if not bind_path: return
+
+        candidates = self._find_human21_bindpose_candidates()
+        bind_path = candidates[0] if len(candidates) == 1 else None
+
+        if bind_path is not None:
+            self._log(f"Auto-selected Human21 bind pose: {bind_path}")
+        else:
+            initial = None
+            if candidates:
+                initial = str(candidates[0].parent)
+            else:
+                out_text = self.out_var.get().strip()
+                initial = out_text or str(self.current_raw_path.parent)
+
+            while True:
+                chosen_bind = filedialog.askopenfilename(
+                    title="Select human_21_bindpose.raw (21-bone bind/static pose)",
+                    initialdir=initial,
+                    initialfile="human_21_bindpose.raw",
+                    filetypes=[("RAW files","*.raw"),("All files","*.*")],
+                )
+                if not chosen_bind:
+                    return
+                candidate = Path(chosen_bind)
+                try:
+                    check = inspect_second_sight_raw(candidate)
+                except Exception as exc:
+                    messagebox.showerror("Invalid bind RAW", f"{candidate}\n\n{exc}")
+                    initial = str(candidate.parent)
+                    continue
+                if check.bone_count == 21 and check.kind_guess in ("Static / Pose-like", "Bind Pose-like"):
+                    bind_path = candidate
+                    break
+                messagebox.showwarning(
+                    "Wrong bind file selected",
+                    f"Selected:\n{candidate}\n\n"
+                    f"Detected: {check.kind_guess}, bones={check.bone_count}\n\n"
+                    "Please select human_21_bindpose.raw or another 21-bone bind/static pose RAW."
+                )
+                initial = str(candidate.parent)
+
+        # Validate auto-discovered bind too before asking where to save.
+        try:
+            bind_check = inspect_second_sight_raw(bind_path)
+        except Exception as exc:
+            self._log(f"Auto bind validation failed: {bind_path}: {exc}")
+            return messagebox.showerror("Bind RAW validation failed", f"{bind_path}\n\n{exc}")
+        if bind_check.bone_count != 21 or bind_check.kind_guess not in ("Static / Pose-like", "Bind Pose-like"):
+            self._log(
+                f"Rejected bind RAW: {bind_path} -> {bind_check.kind_guess}, bones={bind_check.bone_count}"
+            )
+            return messagebox.showerror(
+                "Bind RAW validation failed",
+                f"{bind_path}\n\nDetected: {bind_check.kind_guess}, bones={bind_check.bone_count}"
+            )
+
         chosen = filedialog.asksaveasfilename(
             title="Save Maya preview importer",
             defaultextension=".py",
@@ -356,7 +437,7 @@ class SecondSightExtractorApp(tk.Tk):
         if not chosen: return
         try:
             meta = write_maya_preview_script_from_raw(
-                Path(bind_path),
+                bind_path,
                 self.current_raw_path,
                 Path(chosen),
                 unit_scale=100.0,
@@ -367,12 +448,13 @@ class SecondSightExtractorApp(tk.Tk):
         mirror = meta["bind_validation"]["max_mirror_error"]
         height = meta["bind_validation"]["head_to_foot_height"]
         self._log(
-            f"Maya preview script saved: {chosen}; core joints 0..18 resolved; "
+            f"Maya preview script saved: {chosen}; bind={bind_path.name}; core joints 0..18 resolved; "
             f"indices 19/20 unresolved; bind mirror error={mirror:.6g}, height={height:.6g}"
         )
         messagebox.showinfo(
             "Maya preview script saved",
-            f"{chosen}\n\nResolved core joints: 19 / 21\n"
+            f"{chosen}\n\nBind pose: {bind_path.name}\n"
+            f"Resolved core joints: 19 / 21\n"
             f"Unresolved indices: 19, 20\n"
             f"Default unit scale: 100 (meters-like -> Maya cm)\n"
             f"Bind symmetry max error: {mirror:.6g}"

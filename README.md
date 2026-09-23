@@ -1,4 +1,4 @@
-# SecondSightRE v0.6.7 Alpha — Human21 Skeleton + Maya Preview
+# SecondSightRE v0.6.8 Alpha — Human21 Maya Preview + Auto Bind Discovery
 
 A read-only desktop extractor for Second Sight / Free Radical `P4CK`, `P5CK`, and `P8CK` PAK archives, built as the first stage of a Second Sight -> DCC/Unreal asset pipeline.
 
@@ -92,7 +92,7 @@ Run:
 build_exe_windows.bat
 ```
 
-This installs PyInstaller if needed and builds a windowed one-file executable named from the centralized version, e.g. `SecondSightRE_v0.6.7.exe`.
+This installs PyInstaller if needed and builds a windowed one-file executable named from the centralized version, e.g. `SecondSightRE_v0.6.8.exe`.
 
 ## Research basis
 
@@ -395,3 +395,17 @@ Run the generator self-test:
 ```bat
 python maya_preview_selftest.py
 ```
+
+
+## v0.6.8 — Maya bind-pose selection fix
+
+The first Maya-preview GUI build opened the bind-pose file dialog in the current animation folder. That made it easy to accidentally select another animation RAW such as `1_punch_lft.raw`, which then failed with `Expected a bind/static pose IR, got 'Animation-like'`.
+
+v0.6.8 fixes that workflow:
+
+- automatically searches the extracted tree for `human_21_bindpose.raw`;
+- if exactly one match is found, it is selected automatically;
+- otherwise the file picker explicitly asks for `human_21_bindpose.raw`;
+- the selected RAW is validated as 21-bone `Static / Pose-like` or `Bind Pose-like` before the save dialog appears;
+- wrong animation RAW selections are rejected immediately with the selected path, detected kind, and bone count;
+- Maya-preview validation errors now include the actual bind/animation source path.

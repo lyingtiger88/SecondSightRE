@@ -41,12 +41,24 @@ def build_maya_preview_script(
     animation_ir: dict[str, Any],
     unit_scale: float = 100.0,
 ) -> str:
-    if bind_ir.get("bone_count") != 21 or animation_ir.get("bone_count") != 21:
-        raise MayaPreviewError("The current Maya preview profile requires both IR files to have 21 bones.")
+    bind_src = bind_ir.get("source_path", "<unknown bind source>")
+    anim_src = animation_ir.get("source_path", "<unknown animation source>")
+    if bind_ir.get("bone_count") != 21:
+        raise MayaPreviewError(
+            f"Bind/static pose must have 21 bones; got {bind_ir.get('bone_count')} from: {bind_src}"
+        )
+    if animation_ir.get("bone_count") != 21:
+        raise MayaPreviewError(
+            f"Animation must have 21 bones; got {animation_ir.get('bone_count')} from: {anim_src}"
+        )
     if bind_ir.get("kind") not in ("Static / Pose-like", "Bind Pose-like"):
-        raise MayaPreviewError(f"Expected a bind/static pose IR, got {bind_ir.get('kind')!r}.")
+        raise MayaPreviewError(
+            f"Selected bind file is not a bind/static pose. Got {bind_ir.get('kind')!r} from: {bind_src}"
+        )
     if animation_ir.get("kind") != "Animation-like":
-        raise MayaPreviewError(f"Expected an animation IR, got {animation_ir.get('kind')!r}.")
+        raise MayaPreviewError(
+            f"Selected animation is not Animation-like. Got {animation_ir.get('kind')!r} from: {anim_src}"
+        )
 
     bind_validation = validate_human21_bind_geometry(bind_ir)
     profile = skeleton_profile_metadata()
