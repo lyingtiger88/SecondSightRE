@@ -1,0 +1,26 @@
+name: SecondSightRE self-tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python sources
+        run: python -m compileall -q app main.py
+      - name: Run archive and RAW self-tests
+        shell: pwsh
+        run: |
+          python selftest.py
+          python raw_selftest.py
+          python ssraw_selftest.py
+          python animation_ir_selftest.py
+          python maya_preview_selftest.py
