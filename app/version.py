@@ -1,6 +1,6 @@
-__version__ = "0.6.8"
+__version__ = "0.6.9"
 APP_NAME = "SecondSightRE"
-APP_PHASE = "Human21 Maya Preview + Auto Bind Discovery"
+APP_PHASE = "Preview Bundle Pipeline"
 
 def app_title() -> str:
     return f"{APP_NAME} v{__version__} Alpha - {APP_PHASE}"
