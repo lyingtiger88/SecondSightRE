@@ -52,7 +52,8 @@ def main():
     script = build_maya_preview_script(bind_ir, anim_ir)
     compile(script, "generated_maya_preview.py", "exec")
 
-    assert "SS_Right_Shoulder_1" in script
+    assert '"name":"Right_Shoulder_1"' in script
+    assert '"SS_" + bone["name"]' in script
     assert "indices 19 and 20 are intentionally omitted" in script
     assert "UNIT_SCALE" in script
     assert "build_preview()" in script
