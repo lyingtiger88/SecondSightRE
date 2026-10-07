@@ -24,12 +24,58 @@ def cli(argv: list[str]) -> int:
     p.add_argument('--scan-raw', metavar='DIR', help='Analyze Second Sight .raw files below a folder and write a versioned RAW report')
     p.add_argument('--export-raw-ir', metavar='RAW', help='Decode one Second Sight RAW into destination-neutral animation IR JSON')
     p.add_argument('--export-maya-preview', metavar='ANIM_RAW', help='Generate a Maya Python preview importer for one 21-bone animation RAW')
+    p.add_argument('--export-preview-bundle', metavar='ANIM_RAW', help='Export animation IR, bind IR, Maya preview script, and bundle manifest in one step')
     p.add_argument('--bind-raw', metavar='BIND_RAW', help='Bind/static pose RAW used with --export-maya-preview')
     p.add_argument('--maya-unit-scale', type=float, default=100.0, help='Position scale for Maya preview export (default: 100)')
     args = p.parse_args(argv)
 
     plugin = FreeRadicalPakPlugin()
     out = Path(args.output)
+
+    if args.export_preview_bundle:
+        if not args.bind_raw:
+            p.error('--export-preview-bundle requires --bind-raw')
+        import json
+        anim_path = Path(args.export_preview_bundle)
+        bind_path = Path(args.bind_raw)
+        bundle_dir = out / f"{anim_path.stem}_preview_bundle"
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+
+        anim_ir_path = bundle_dir / f"{anim_path.stem}_animation_ir.json"
+        bind_ir_path = bundle_dir / f"{bind_path.stem}_bind_ir.json"
+        maya_path = bundle_dir / f"{anim_path.stem}_maya_preview.py"
+        manifest_path = bundle_dir / "bundle_manifest.json"
+
+        anim_ir = write_animation_ir(anim_path, anim_ir_path)
+        bind_ir = write_animation_ir(bind_path, bind_ir_path)
+        meta = write_maya_preview_script_from_raw(
+            bind_path,
+            anim_path,
+            maya_path,
+            unit_scale=args.maya_unit_scale,
+        )
+        manifest = {
+            "tool": APP_NAME,
+            "version": __version__,
+            "animation_raw": str(anim_path),
+            "bind_raw": str(bind_path),
+            "animation_ir": str(anim_ir_path),
+            "bind_ir": str(bind_ir_path),
+            "maya_preview": str(maya_path),
+            "animation_bones": anim_ir["bone_count"],
+            "bind_bones": bind_ir["bone_count"],
+            "resolved_core_joints": 19,
+            "unresolved_indices": [19, 20],
+            "unit_scale": args.maya_unit_scale,
+            "bind_validation": meta["bind_validation"],
+        }
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"Preview bundle: {bundle_dir}")
+        print(f"Manifest: {manifest_path}")
+        return 0
 
     if args.export_maya_preview:
         if not args.bind_raw:
